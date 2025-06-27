@@ -1,0 +1,12 @@
+# Abaikan virtual environment
+venv/
+
+# Abaikan file Python cache
+__pycache__/
+*.pyc
+
+# Abaikan folder temporary upload
+temp_video/
+
+# Abaikan file sementara lainnya
+*.log
