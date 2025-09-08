@@ -10,7 +10,7 @@ app.config['UPLOAD_FOLDER'] = 'temp_video'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Inisialisasi detector FER
-detector = FER()
+detector = FER(mtcnn=False)
 
 # Bobot untuk masing-masing emosi
 emotion_weights = {
