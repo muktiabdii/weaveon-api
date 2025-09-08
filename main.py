@@ -24,7 +24,7 @@ emotion_weights = {
 }
 
 # Fungsi bantu untuk ekstrak frame dari video
-def extract_frames(video_path, max_frames=60):
+def extract_frames(video_path, max_frames=30):
     cap = cv2.VideoCapture(video_path)
     frames = []
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
