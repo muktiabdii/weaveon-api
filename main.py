@@ -10,7 +10,7 @@ app.config['UPLOAD_FOLDER'] = 'temp_video'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Inisialisasi detector FER
-detector = FER(mtcnn=True)
+detector = FER()
 
 # Bobot untuk masing-masing emosi
 emotion_weights = {
@@ -69,11 +69,11 @@ def analyze_emotions(frames):
     if score > 1.2:
         label = "Sangat senang"
     elif score >= 0.5:
-        label = "Cukup senang"
+        label = "Cukup senang" # senang
     elif score > -0.5:
-        label = "Netral"
+        label = "Netral" # hapus
     elif score >= -1.2:
-        label = "Kurang senang"
+        label = "Kurang senang" # tidak senang
     else:
         label = "Sangat tidak senang"
 
