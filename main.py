@@ -40,8 +40,7 @@ def preprocess_frame(frame):
     try:
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame_resized = cv2.resize(frame_rgb, (160, 160), interpolation=cv2.INTER_AREA)
-        frame_normalized = frame_resized / 255.0
-        return frame_normalized
+        return frame_resized  # Remove normalization to keep uint8
     except Exception as e:
         logger.error(f"Error preprocessing frame: {str(e)}")
         return frame
@@ -77,6 +76,7 @@ def analyze_emotions(frames, temporal_weighting=True):
     total_frames = len(frames)
 
     for i, frame in enumerate(frames):
+        logger.debug(f"Processing frame {i}")
         try:
             result = detector.detect_emotions(frame)
             if result and len(result) > 0:
@@ -92,6 +92,7 @@ def analyze_emotions(frames, temporal_weighting=True):
                     frame_score *= weight
                 emotion_scores.append(frame_score)
                 frame_count += 1
+                logger.debug(f"Frame {i} analyzed successfully, score={frame_score}")
             else:
                 emotion_scores.append(0.0)
                 logger.debug(f"No emotions detected in frame {i}")
@@ -164,6 +165,7 @@ async def analyze(file: UploadFile = File(...)):
             content = await file.read()
             tmp.write(content)
             tmp_path = tmp.name
+            logger.debug(f"Temporary file saved at {tmp_path}")
         except Exception as e:
             logger.error(f"Error saving file: {str(e)}")
             raise HTTPException(status_code=500, detail="Error saving video file")
@@ -172,6 +174,7 @@ async def analyze(file: UploadFile = File(...)):
         async with asyncio.timeout(30):
             frames = extract_frames(tmp_path)
             result = analyze_emotions(frames, temporal_weighting=True)
+            logger.info("Processing completed successfully")
     except asyncio.TimeoutError:
         logger.error("Processing timed out after 30 seconds")
         raise HTTPException(status_code=504, detail="Processing timed out")
@@ -181,6 +184,7 @@ async def analyze(file: UploadFile = File(...)):
     finally:
         try:
             os.remove(tmp_path)
+            logger.debug(f"Temporary file deleted: {tmp_path}")
         except Exception as e:
             logger.error(f"Error deleting temp file: {str(e)}")
 
