@@ -13,7 +13,7 @@ UPLOAD_FOLDER = "temp_video"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Inisialisasi detector FER
-detector = FER(mtcnn=False)  # lebih ringan tanpa MTCNN
+detector = FER(mtcnn=True)  
 
 # Bobot emosi yang lebih seimbang (skala -1 sampai 1)
 emotion_weights = {
