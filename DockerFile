@@ -1,27 +1,18 @@
-FROM python:3.11-slim AS builder
-
-WORKDIR /app
-
-# Install dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1 libglib2.0-0 build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir fer==22.5.1 --no-deps \
-    && pip install --no-cache-dir fastapi uvicorn[standard] opencv-python-headless numpy scipy
-
-COPY . .
-
-# Stage runtime lebih bersih
 FROM python:3.11-slim
 
 WORKDIR /app
+
+# install lib untuk opencv
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /usr/local /usr/local
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir git+https://github.com/justinshenk/fer.git@22.5.1 --no-deps
+
 COPY . .
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
