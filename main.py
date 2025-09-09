@@ -15,7 +15,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 # Inisialisasi detector FER
 detector = FER(mtcnn=False)  # lebih ringan tanpa MTCNN
 
-# Bobot emosi yang lebih seimbang (disesuaikan berdasarkan skala -1 hingga 1 untuk normalisasi)
+# Bobot emosi yang lebih seimbang (skala -1 sampai 1)
 emotion_weights = {
     "angry": -1.0,
     "disgust": -0.8,
@@ -26,37 +26,55 @@ emotion_weights = {
     "neutral": 0.0
 }
 
+# Fungsi untuk ekstraksi frame dari video
+def extract_frames(video_path, max_frames=100):
+    frames = []
+    cap = cv2.VideoCapture(video_path)
+    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    # Batasin jumlah frame biar tidak terlalu berat
+    step = max(1, total // max_frames)
+
+    count = 0
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+        if count % step == 0:
+            # Resize biar lebih ringan untuk analisis
+            frame = cv2.resize(frame, (224, 224))
+            frames.append(frame)
+        count += 1
+
+    cap.release()
+    return frames
+
+# Fungsi untuk analisis emosi
 def analyze_emotions(frames, temporal_weighting=True):
-    emotion_scores = []  # Menyimpan vektor skor per frame
+    emotion_scores = []
     emotion_counts = {emo: 0 for emo in emotion_weights.keys()}
     frame_count = 0
     total_frames = len(frames)
 
     for i, frame in enumerate(frames):
-        # Gunakan FER untuk mendapatkan distribusi probabilitas emosi
         result = detector.detect_emotions(frame)
         if result and len(result) > 0:
-            # Ambil probabilitas emosi dari deteksi pertama (asumsi satu wajah per frame)
             emotions = result[0]["emotions"]
-            
-            # Hitung skor frame sebagai kombinasi probabilitas * bobot
+
             frame_score = 0
             for emo, prob in emotions.items():
                 if emo in emotion_weights:
                     frame_score += prob * emotion_weights[emo]
-                    if prob > 0.1:  # Hitung emosi dengan probabilitas signifikan
+                    if prob > 0.1:
                         emotion_counts[emo] += 1
-            
-            # Terapkan bobot temporal (opsional)
+
             if temporal_weighting:
-                # Berikan bobot lebih pada frame di 50% terakhir video
                 weight = 1.0 + 0.5 * (i / total_frames) if total_frames > 0 else 1.0
                 frame_score *= weight
-            
+
             emotion_scores.append(frame_score)
             frame_count += 1
         else:
-            # Jika deteksi gagal, gunakan skor netral (0) untuk menghindari bias
             emotion_scores.append(0.0)
 
     if frame_count == 0:
@@ -68,15 +86,12 @@ def analyze_emotions(frames, temporal_weighting=True):
             "confidence": 0.0
         }
 
-    # Hitung statistik
-    score = np.mean(emotion_scores)  # Rata-rata skor
-    score_std = np.std(emotion_scores) if len(emotion_scores) > 1 else 0.0  # Standar deviasi
-    confidence = frame_count / total_frames if total_frames > 0 else 0.0  # Proporsi frame terdeteksi
+    score = np.mean(emotion_scores)
+    score_std = np.std(emotion_scores) if len(emotion_scores) > 1 else 0.0
+    confidence = frame_count / total_frames if total_frames > 0 else 0.0
 
-    # Normalisasi skor ke [-1, 1] jika diperlukan
     score = max(min(score, 1.0), -1.0)
 
-    # Tentukan label berdasarkan skor
     if score > 0.6:
         label = "Sangat senang"
     elif score >= 0.2:
@@ -88,7 +103,6 @@ def analyze_emotions(frames, temporal_weighting=True):
     else:
         label = "Sangat tidak senang"
 
-    # Hitung distribusi emosi
     distribution = {
         emo: round((count / frame_count) * 100, 2)
         for emo, count in emotion_counts.items() if count > 0
@@ -96,10 +110,10 @@ def analyze_emotions(frames, temporal_weighting=True):
 
     return {
         "score": round(score, 2),
-        "score_std": round(score_std, 2),  # Tambahan: variabilitas skor
+        "score_std": round(score_std, 2),
         "label": label,
         "distribution": distribution,
-        "confidence": round(confidence * 100, 2)  # Persentase frame terdeteksi
+        "confidence": round(confidence * 100, 2)
     }
 
 # Endpoint FastAPI
@@ -108,7 +122,6 @@ async def analyze(file: UploadFile = File(...)):
     if not file.filename:
         raise HTTPException(status_code=400, detail="No selected video")
 
-    # Simpan sementara video ke temp file
     with NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
         tmp.write(await file.read())
         tmp_path = tmp.name
@@ -117,6 +130,6 @@ async def analyze(file: UploadFile = File(...)):
         frames = extract_frames(tmp_path)
         result = analyze_emotions(frames)
     finally:
-        os.remove(tmp_path)  # hapus file setelah selesai
+        os.remove(tmp_path)
 
     return JSONResponse(content=result)
