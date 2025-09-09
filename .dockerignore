@@ -1,0 +1,19 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.git
+.gitignore
+*.md
+*.log
+*.zip
+*.tar.gz
+venv/
+env/
+*.pth
+*.egg-info
+dist/
+build/
+*.data
+*.h5  # Model files dari TensorFlow/fer
+*.pt  # Model files dari PyTorch

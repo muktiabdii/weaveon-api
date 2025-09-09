@@ -1,25 +1,24 @@
-FROM python:3.12-slim
-
+# Build stage
+FROM python:3.12-slim AS builder
 WORKDIR /app
+COPY requirements.txt .
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && pip install --no-cache-dir --user -r requirements.txt \
+    && apt-get purge -y --auto-remove build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install deps untuk OpenCV + video
+# Final stage
+FROM python:3.12-slim
+WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libsm6 \
     libxext6 \
     libgl1 \
     && rm -rf /var/lib/apt/lists/*
-
-# Install Python deps
-COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
-
-# Copy source code
+COPY --from=builder /root/.local /root/.local
 COPY . .
-
-# Expose port (Railway pakai $PORT)
+ENV PATH=/root/.local/bin:$PATH
 EXPOSE ${PORT:-8080}
-
-# Jalankan uvicorn server
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "${PORT:-8080}"]
