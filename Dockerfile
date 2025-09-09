@@ -19,7 +19,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 COPY . .
 
 # Expose port (Railway pakai $PORT)
-EXPOSE 8080
+EXPOSE ${PORT:-8080}
 
 # Jalankan uvicorn server
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "${PORT:-8080}"]
