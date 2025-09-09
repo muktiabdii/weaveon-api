@@ -1,19 +1,15 @@
-FROM python:3.10-slim
+FROM python:3.11-slim
 
-# Install dependencies OS untuk OpenCV
 RUN apt-get update && apt-get install -y \
     libgl1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Salin dan install dependencies Python
 COPY requirements.txt requirements.txt
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
-# Salin semua file project
 COPY . .
 
-# Jalankan FastAPI via Uvicorn
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
