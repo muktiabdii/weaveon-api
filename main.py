@@ -15,73 +15,92 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 # Inisialisasi detector FER
 detector = FER(mtcnn=False)  # lebih ringan tanpa MTCNN
 
-# Bobot emosi
+# Bobot emosi yang lebih seimbang (disesuaikan berdasarkan skala -1 hingga 1 untuk normalisasi)
 emotion_weights = {
-    "angry": -3,
-    "disgust": -3,
-    "fear": -2,
-    "happy": 2,
-    "sad": -2,
-    "surprise": 1,
-    "neutral": 0
+    "angry": -1.0,
+    "disgust": -0.8,
+    "fear": -0.6,
+    "happy": 1.0,
+    "sad": -0.7,
+    "surprise": 0.5,
+    "neutral": 0.0
 }
 
-# Fungsi ekstrak frame dari video
-def extract_frames(video_path, max_frames=60):
-    cap = cv2.VideoCapture(video_path)
-    frames = []
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    interval = max(1, total_frames // max_frames)
-    count = 0
-
-    while cap.isOpened() and len(frames) < max_frames:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        if count % interval == 0:
-            frames.append(frame)
-        count += 1
-
-    cap.release()
-    return frames
-
-# Fungsi analisis emosi
-def analyze_emotions(frames):
+def analyze_emotions(frames, temporal_weighting=True):
+    emotion_scores = []  # Menyimpan vektor skor per frame
     emotion_counts = {emo: 0 for emo in emotion_weights.keys()}
-    total_weight = 0
     frame_count = 0
+    total_frames = len(frames)
 
-    for frame in frames:
-        result = detector.top_emotion(frame)
-        if result:
-            emotion, _ = result
-            if emotion in emotion_counts:
-                emotion_counts[emotion] += 1
-                total_weight += emotion_weights[emotion]
-                frame_count += 1
+    for i, frame in enumerate(frames):
+        # Gunakan FER untuk mendapatkan distribusi probabilitas emosi
+        result = detector.detect_emotions(frame)
+        if result and len(result) > 0:
+            # Ambil probabilitas emosi dari deteksi pertama (asumsi satu wajah per frame)
+            emotions = result[0]["emotions"]
+            
+            # Hitung skor frame sebagai kombinasi probabilitas * bobot
+            frame_score = 0
+            for emo, prob in emotions.items():
+                if emo in emotion_weights:
+                    frame_score += prob * emotion_weights[emo]
+                    if prob > 0.1:  # Hitung emosi dengan probabilitas signifikan
+                        emotion_counts[emo] += 1
+            
+            # Terapkan bobot temporal (opsional)
+            if temporal_weighting:
+                # Berikan bobot lebih pada frame di 50% terakhir video
+                weight = 1.0 + 0.5 * (i / total_frames) if total_frames > 0 else 1.0
+                frame_score *= weight
+            
+            emotion_scores.append(frame_score)
+            frame_count += 1
+        else:
+            # Jika deteksi gagal, gunakan skor netral (0) untuk menghindari bias
+            emotion_scores.append(0.0)
 
     if frame_count == 0:
-        return {"score": 0, "label": "Tidak terdeteksi", "distribution": {}}
+        return {
+            "score": 0.0,
+            "score_std": 0.0,
+            "label": "Tidak terdeteksi",
+            "distribution": {},
+            "confidence": 0.0
+        }
 
-    score = total_weight / frame_count
+    # Hitung statistik
+    score = np.mean(emotion_scores)  # Rata-rata skor
+    score_std = np.std(emotion_scores) if len(emotion_scores) > 1 else 0.0  # Standar deviasi
+    confidence = frame_count / total_frames if total_frames > 0 else 0.0  # Proporsi frame terdeteksi
 
-    if score > 1.2:
+    # Normalisasi skor ke [-1, 1] jika diperlukan
+    score = max(min(score, 1.0), -1.0)
+
+    # Tentukan label berdasarkan skor
+    if score > 0.6:
         label = "Sangat senang"
-    elif score >= 0.5:
+    elif score >= 0.2:
         label = "Cukup senang"
-    elif score > -0.5:
+    elif score > -0.2:
         label = "Netral"
-    elif score >= -1.2:
+    elif score >= -0.6:
         label = "Kurang senang"
     else:
         label = "Sangat tidak senang"
 
+    # Hitung distribusi emosi
     distribution = {
         emo: round((count / frame_count) * 100, 2)
         for emo, count in emotion_counts.items() if count > 0
     }
 
-    return {"score": round(score, 2), "label": label, "distribution": distribution}
+    return {
+        "score": round(score, 2),
+        "score_std": round(score_std, 2),  # Tambahan: variabilitas skor
+        "label": label,
+        "distribution": distribution,
+        "confidence": round(confidence * 100, 2)  # Persentase frame terdeteksi
+    }
 
 # Endpoint FastAPI
 @app.post("/analyze")
