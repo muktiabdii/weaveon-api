@@ -1,18 +1,21 @@
-from flask import Flask, request, jsonify
-import cv2
 import os
+import cv2
+import numpy as np
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.responses import JSONResponse
 from fer import FER
-from werkzeug.utils import secure_filename
+from tempfile import NamedTemporaryFile
 
-# Konfigurasi dasar
-app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'temp_video'
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+# Setup FastAPI
+app = FastAPI(title="Emotion Analyzer API")
+
+UPLOAD_FOLDER = "temp_video"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Inisialisasi detector FER
-detector = FER(mtcnn=False)
+detector = FER(mtcnn=False)  # lebih ringan tanpa MTCNN
 
-# Bobot untuk masing-masing emosi
+# Bobot emosi
 emotion_weights = {
     "angry": -3,
     "disgust": -3,
@@ -23,7 +26,7 @@ emotion_weights = {
     "neutral": 0
 }
 
-# Fungsi bantu untuk ekstrak frame dari video
+# Fungsi ekstrak frame dari video
 def extract_frames(video_path, max_frames=30):
     cap = cv2.VideoCapture(video_path)
     frames = []
@@ -42,7 +45,7 @@ def extract_frames(video_path, max_frames=30):
     cap.release()
     return frames
 
-# Fungsi untuk menghitung distribusi dan skor emosi
+# Fungsi analisis emosi
 def analyze_emotions(frames):
     emotion_counts = {emo: 0 for emo in emotion_weights.keys()}
     total_weight = 0
@@ -58,59 +61,43 @@ def analyze_emotions(frames):
                 frame_count += 1
 
     if frame_count == 0:
-        return {
-            "score": 0,
-            "label": "Tidak terdeteksi",
-            "distribution": {},
-        }
+        return {"score": 0, "label": "Tidak terdeteksi", "distribution": {}}
 
     score = total_weight / frame_count
 
     if score > 1.2:
         label = "Sangat senang"
     elif score >= 0.5:
-        label = "Cukup senang" # senang
+        label = "Cukup senang"
     elif score > -0.5:
-        label = "Netral" # hapus
+        label = "Netral"
     elif score >= -1.2:
-        label = "Kurang senang" # tidak senang
+        label = "Kurang senang"
     else:
         label = "Sangat tidak senang"
 
-    # Hitung persentase distribusi
     distribution = {
         emo: round((count / frame_count) * 100, 2)
-        for emo, count in emotion_counts.items()
-        if count > 0
+        for emo, count in emotion_counts.items() if count > 0
     }
 
-    return {
-        "score": round(score, 2),
-        "label": label,
-        "distribution": distribution,
-    }
+    return {"score": round(score, 2), "label": label, "distribution": distribution}
 
-# Endpoint API
-@app.route('/analyze', methods=['POST'])
-def analyze():
-    if 'video' not in request.files:
-        return jsonify({"error": "No video part in the request"}), 400
+# Endpoint FastAPI
+@app.post("/analyze")
+async def analyze(file: UploadFile = File(...)):
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No selected video")
 
-    video = request.files['video']
-    if video.filename == '':
-        return jsonify({"error": "No selected video"}), 400
-
-    filename = secure_filename(video.filename)
-    video_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    video.save(video_path)
+    # Simpan sementara video ke temp file
+    with NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
+        tmp.write(await file.read())
+        tmp_path = tmp.name
 
     try:
-        frames = extract_frames(video_path)
+        frames = extract_frames(tmp_path)
         result = analyze_emotions(frames)
     finally:
-        os.remove(video_path)  # Hapus video setelah analisis selesai
+        os.remove(tmp_path)  # hapus file setelah selesai
 
-    return jsonify(result)
-
-if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)
+    return JSONResponse(content=result)
