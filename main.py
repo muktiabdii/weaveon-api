@@ -15,7 +15,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 # Inisialisasi detector FER
 detector = FER(mtcnn=False)  # lebih ringan tanpa MTCNN
 
-# Bobot emosi yang lebih seimbang (skala -1 sampai 1)
+# Bobot emosi (skala -1 sampai 1)
 emotion_weights = {
     "angry": -1.0,
     "disgust": -0.8,
@@ -26,22 +26,19 @@ emotion_weights = {
     "neutral": 0.0
 }
 
-# Fungsi untuk ekstraksi frame dari video
+# Ekstraksi frame dari video
 def extract_frames(video_path, max_frames=100):
     frames = []
     cap = cv2.VideoCapture(video_path)
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    # Batasin jumlah frame biar tidak terlalu berat
     step = max(1, total // max_frames)
-
     count = 0
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
         if count % step == 0:
-            # Resize biar lebih ringan untuk analisis
             frame = cv2.resize(frame, (224, 224))
             frames.append(frame)
         count += 1
@@ -49,7 +46,7 @@ def extract_frames(video_path, max_frames=100):
     cap.release()
     return frames
 
-# Fungsi untuk analisis emosi
+# Analisis emosi
 def analyze_emotions(frames, temporal_weighting=True):
     emotion_scores = []
     emotion_counts = {emo: 0 for emo in emotion_weights.keys()}
@@ -58,7 +55,7 @@ def analyze_emotions(frames, temporal_weighting=True):
 
     for i, frame in enumerate(frames):
         result = detector.detect_emotions(frame)
-        if result and len(result) > 0:
+        if result:
             emotions = result[0]["emotions"]
 
             frame_score = 0
@@ -68,29 +65,22 @@ def analyze_emotions(frames, temporal_weighting=True):
                     if prob > 0.1:
                         emotion_counts[emo] += 1
 
-            if temporal_weighting:
-                weight = 1.0 + 0.5 * (i / total_frames) if total_frames > 0 else 1.0
+            if temporal_weighting and total_frames > 0:
+                weight = 1.0 + 0.5 * (i / total_frames)
                 frame_score *= weight
 
             emotion_scores.append(frame_score)
             frame_count += 1
-        else:
-            emotion_scores.append(0.0)
 
     if frame_count == 0:
         return {
             "score": 0.0,
-            "score_std": 0.0,
             "label": "Tidak terdeteksi",
-            "distribution": {},
-            "confidence": 0.0
+            "distribution": {}
         }
 
     score = np.mean(emotion_scores)
-    score_std = np.std(emotion_scores) if len(emotion_scores) > 1 else 0.0
-    confidence = frame_count / total_frames if total_frames > 0 else 0.0
-
-    score = max(min(score, 1.0), -1.0)
+    score = max(min(score, 1.0), -1.0)  # clamp -1..1
 
     if score > 0.6:
         label = "Sangat senang"
@@ -110,10 +100,8 @@ def analyze_emotions(frames, temporal_weighting=True):
 
     return {
         "score": round(score, 2),
-        "score_std": round(score_std, 2),
         "label": label,
-        "distribution": distribution,
-        "confidence": round(confidence * 100, 2)
+        "distribution": distribution
     }
 
 # Endpoint FastAPI
