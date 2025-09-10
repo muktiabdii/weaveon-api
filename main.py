@@ -13,7 +13,7 @@ UPLOAD_FOLDER = "temp_video"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Inisialisasi detector FER
-detector = FER(mtcnn=False)  # lebih ringan tanpa MTCNN
+detector = FER(mtcnn=True) 
 
 # Bobot emosi (skala -1 sampai 1)
 emotion_weights = {
@@ -39,7 +39,7 @@ def extract_frames(video_path, max_frames=100):
         if not ret:
             break
         if count % step == 0:
-            frame = cv2.resize(frame, (224, 224))
+            frame = cv2.resize(frame, (640, 480))
             frames.append(frame)
         count += 1
 
