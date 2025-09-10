@@ -17,11 +17,11 @@ detector = FER(mtcnn=False)
 
 # Bobot emosi (skala -1 sampai 1)
 emotion_weights = {
-    "angry": -1.0,
+    "angry": -0.8,
     "disgust": -0.8,
-    "fear": -0.6,
-    "happy": 1.0,
-    "sad": -0.7,
+    "fear": -0.4,
+    "happy": 1.2,
+    "sad": -0.5,
     "surprise": 0.5,
     "neutral": 0.0
 }
@@ -94,16 +94,15 @@ def analyze_emotions(frames, temporal_weighting=True):
     score = np.mean(emotion_scores)
     score = max(min(score, 1.0), -1.0)  # clamp -1..1
 
-    if score > 0.6:
+    if score > 0.4:
         label = "Sangat senang"
-    elif score >= 0.2:
+    elif score >= 0.1:
         label = "Cukup senang"
-    elif score > -0.2:
-        label = "Netral"
-    elif score >= -0.6:
+    elif score >= -0.3:
         label = "Kurang senang"
     else:
         label = "Sangat tidak senang"
+
 
     distribution = {
         emo: round((count / frame_count) * 100, 2)
