@@ -20,8 +20,8 @@ emotion_weights = {
     "angry": -0.8,
     "disgust": -0.8,
     "fear": -0.4,
-    "happy": 1.2,
-    "sad": -0.5,
+    "happy": 1.3,
+    "sad": -0.3,
     "surprise": 0.5,
     "neutral": 0.0
 }
