@@ -39,12 +39,15 @@ def extract_frames(video_path, max_frames=100):
         if not ret:
             break
         if count % step == 0:
+            # resize + konversi ke RGB
             frame = cv2.resize(frame, (640, 480))
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             frames.append(frame)
         count += 1
 
     cap.release()
     return frames
+
 
 # Analisis emosi
 def analyze_emotions(frames, temporal_weighting=True):
