@@ -12,8 +12,8 @@ app = FastAPI(title="Emotion Analyzer API")
 UPLOAD_FOLDER = "temp_video"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Inisialisasi detector FER
-detector = FER(mtcnn=True) 
+# Inisialisasi detector FER (lebih ringan tanpa MTCNN)
+detector = FER(mtcnn=False)
 
 # Bobot emosi (skala -1 sampai 1)
 emotion_weights = {
@@ -27,10 +27,13 @@ emotion_weights = {
 }
 
 # Ekstraksi frame dari video
-def extract_frames(video_path, max_frames=100):
+def extract_frames(video_path, max_frames=60):
     frames = []
     cap = cv2.VideoCapture(video_path)
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    if total == 0:
+        return frames
 
     step = max(1, total // max_frames)
     count = 0
@@ -39,7 +42,6 @@ def extract_frames(video_path, max_frames=100):
         if not ret:
             break
         if count % step == 0:
-            # resize + konversi ke RGB
             frame = cv2.resize(frame, (640, 480))
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             frames.append(frame)
@@ -47,7 +49,6 @@ def extract_frames(video_path, max_frames=100):
 
     cap.release()
     return frames
-
 
 # Analisis emosi
 def analyze_emotions(frames, temporal_weighting=True):
@@ -57,6 +58,8 @@ def analyze_emotions(frames, temporal_weighting=True):
     total_frames = len(frames)
 
     for i, frame in enumerate(frames):
+        print(f"Processing frame {i+1}/{total_frames}")  # log debug
+
         # pastikan frame RGB 3 channel
         if len(frame.shape) == 2:  # grayscale
             frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
@@ -125,6 +128,7 @@ async def analyze(file: UploadFile = File(...)):
 
     try:
         frames = extract_frames(tmp_path)
+        print(f"Total frames extracted: {len(frames)}")  # log debug
         result = analyze_emotions(frames)
     finally:
         os.remove(tmp_path)
