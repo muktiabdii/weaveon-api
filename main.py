@@ -57,6 +57,12 @@ def analyze_emotions(frames, temporal_weighting=True):
     total_frames = len(frames)
 
     for i, frame in enumerate(frames):
+        # pastikan frame RGB 3 channel
+        if len(frame.shape) == 2:  # grayscale
+            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
+        elif frame.shape[2] == 4:  # RGBA
+            frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2RGB)
+
         result = detector.detect_emotions(frame)
         if result:
             emotions = result[0]["emotions"]
