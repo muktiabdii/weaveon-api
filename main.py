@@ -33,19 +33,23 @@ def extract_frames(video_path, max_frames=60):
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
     if total == 0:
+        cap.release()
         return frames
 
-    step = max(1, total // max_frames)
-    count = 0
-    while cap.isOpened():
+    # Hitung indeks frame yang ingin diambil (maksimal max_frames)
+    if total <= max_frames:
+        frame_indices = list(range(total))
+    else:
+        frame_indices = np.linspace(0, total-1, max_frames, dtype=int)
+
+    for idx in frame_indices:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, idx)  # lompat ke frame idx
         ret, frame = cap.read()
         if not ret:
-            break
-        if count % step == 0:
-            frame = cv2.resize(frame, (640, 480))
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frames.append(frame)
-        count += 1
+            continue
+        frame = cv2.resize(frame, (640, 480))
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frames.append(frame)
 
     cap.release()
     return frames
@@ -58,18 +62,15 @@ def analyze_emotions(frames, temporal_weighting=True):
     total_frames = len(frames)
 
     for i, frame in enumerate(frames):
-        print(f"Processing frame {i+1}/{total_frames}")  # log debug
-
-        # pastikan frame RGB 3 channel
-        if len(frame.shape) == 2:  # grayscale
+        # Pastikan frame RGB
+        if len(frame.shape) == 2:
             frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
-        elif frame.shape[2] == 4:  # RGBA
+        elif frame.shape[2] == 4:
             frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2RGB)
 
         result = detector.detect_emotions(frame)
         if result:
             emotions = result[0]["emotions"]
-
             frame_score = 0
             for emo, prob in emotions.items():
                 if emo in emotion_weights:
@@ -77,6 +78,7 @@ def analyze_emotions(frames, temporal_weighting=True):
                     if prob > 0.1:
                         emotion_counts[emo] += 1
 
+            # Temporal weighting
             if temporal_weighting and total_frames > 0:
                 weight = 1.0 + 0.5 * (i / total_frames)
                 frame_score *= weight
@@ -91,9 +93,13 @@ def analyze_emotions(frames, temporal_weighting=True):
             "distribution": {}
         }
 
-    score = np.mean(emotion_scores)
+    # Skor akhir: rata-rata + median untuk robustness
+    mean_score = np.mean(emotion_scores)
+    median_score = np.median(emotion_scores)
+    score = (mean_score + median_score) / 2
     score = max(min(score, 1.0), -1.0)  # clamp -1..1
 
+    # Label berdasarkan skor
     if score > 0.4:
         label = "Sangat senang"
     elif score >= 0.1:
@@ -103,7 +109,7 @@ def analyze_emotions(frames, temporal_weighting=True):
     else:
         label = "Sangat tidak senang"
 
-
+    # Distribusi emosi
     distribution = {
         emo: round((count / frame_count) * 100, 2)
         for emo, count in emotion_counts.items() if count > 0
